@@ -100,7 +100,23 @@ jobs:
         working-directory: ${{ env.MOBILE_DIR }}
         run: npx tauri ios init --ci
 
+      - name: Clean generated iOS build output
+        if: steps.mobile.outputs.present == 'true'
+        working-directory: ${{ env.MOBILE_DIR }}
+        run: rm -rf src-tauri/gen/apple/build
+
       - name: Build simulator app
         if: steps.mobile.outputs.present == 'true'
         working-directory: ${{ env.MOBILE_DIR }}
         run: npx tauri ios build --debug --target "$TAURI_IOS_TARGET" --no-sign
+
+      - name: Verify generated iOS entitlements are readable
+        if: steps.mobile.outputs.present == 'true'
+        working-directory: ${{ env.MOBILE_DIR }}
+        run: |
+          entitlements="$(find src-tauri/gen/apple -name '*_iOS.entitlements' -print -quit)"
+          if [ -z "$entitlements" ]; then
+            echo "::notice::No generated iOS entitlements file found."
+            exit 0
+          fi
+          plutil -lint "$entitlements"

@@ -72,12 +72,27 @@ Once a downstream project adds `mobile/package-lock.json` and
 4. Runs `cargo check` for the detected mobile crate package against the iOS
    simulator Rust target.
 5. Runs `npx tauri ios init --ci`.
-6. Builds an unsigned debug simulator app with `npx tauri ios build --debug
+6. Clears `src-tauri/gen/apple/build` before archiving so a stale local/CI
+   archive cannot trip Tauri's generated-app rename step on reruns.
+7. Builds an unsigned debug simulator app with `npx tauri ios build --debug
    --target <simulator-target> --no-sign`.
+8. Lints the generated iOS entitlements plist when one exists.
 
 This intentionally proves simulator buildability only. Device signing,
 provisioning profiles, APNs entitlements, and TestFlight/App Store release
 packaging belong in an app-specific release workflow.
+
+Two Tauri iOS details are worth preserving in downstream apps:
+
+- `bundle.iOS.template` is resolved relative to the command's current working
+  directory. If CI runs from `mobile/`, a template committed under
+  `mobile/src-tauri/templates/ios/project.yml` should be configured as
+  `src-tauri/templates/ios/project.yml`, not `templates/ios/project.yml`.
+- `ios init` regenerates the Xcode project and can reset generated
+  entitlements, while Cargo may keep dependency build scripts cache-warm. If an
+  app relies on build scripts to inject entitlements such as APNs or associated
+  domains, add an app-specific post-build assertion that fails when the expected
+  keys are missing.
 
 ---
 
