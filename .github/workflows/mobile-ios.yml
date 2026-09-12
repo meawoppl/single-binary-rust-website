@@ -1,0 +1,106 @@
+# Optional workflow for repositories that add a Tauri mobile shell under
+# mobile/. It stays green for the bare skeleton, then runs a real unsigned iOS
+# simulator build once mobile/package-lock.json and mobile/src-tauri/Cargo.toml
+# exist.
+name: Mobile iOS
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile-ios.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  MOBILE_DIR: mobile
+
+jobs:
+  ios-simulator-build:
+    name: iOS Simulator App
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect mobile workspace
+        id: mobile
+        run: |
+          if [ -f "$MOBILE_DIR/package-lock.json" ] && [ -f "$MOBILE_DIR/src-tauri/Cargo.toml" ]; then
+            package_name="$(python3 - <<'PY'
+          import pathlib
+          import tomllib
+
+          manifest = pathlib.Path("mobile/src-tauri/Cargo.toml")
+          print(tomllib.loads(manifest.read_text())["package"]["name"])
+          PY
+          )"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "package_name=$package_name" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No Tauri mobile app found under mobile/; skipping iOS simulator build."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select iOS simulator target
+        if: steps.mobile.outputs.present == 'true'
+        run: |
+          if [ "$(uname -m)" = "arm64" ]; then
+            echo "TAURI_IOS_TARGET=aarch64-sim" >> "$GITHUB_ENV"
+            echo "IOS_RUST_TARGET=aarch64-apple-ios-sim" >> "$GITHUB_ENV"
+          else
+            echo "TAURI_IOS_TARGET=x86_64" >> "$GITHUB_ENV"
+            echo "IOS_RUST_TARGET=x86_64-apple-ios" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install Rust (iOS simulator)
+        if: steps.mobile.outputs.present == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Cache Rust dependencies
+        if: steps.mobile.outputs.present == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: mobile-ios
+
+      - name: Setup Node 20
+        if: steps.mobile.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile npm dependencies
+        if: steps.mobile.outputs.present == 'true'
+        working-directory: ${{ env.MOBILE_DIR }}
+        run: npm ci
+
+      - name: Verify tauri-cli iOS support
+        if: steps.mobile.outputs.present == 'true'
+        working-directory: ${{ env.MOBILE_DIR }}
+        run: |
+          npx tauri --version
+          npx tauri --help | grep -q 'ios'
+
+      - name: Check mobile crate (iOS simulator)
+        if: steps.mobile.outputs.present == 'true'
+        run: cargo check -p "${{ steps.mobile.outputs.package_name }}" --target "$IOS_RUST_TARGET"
+
+      - name: Initialize iOS project
+        if: steps.mobile.outputs.present == 'true'
+        working-directory: ${{ env.MOBILE_DIR }}
+        run: npx tauri ios init --ci
+
+      - name: Build simulator app
+        if: steps.mobile.outputs.present == 'true'
+        working-directory: ${{ env.MOBILE_DIR }}
+        run: npx tauri ios build --debug --target "$TAURI_IOS_TARGET" --no-sign
