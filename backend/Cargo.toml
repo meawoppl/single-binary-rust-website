@@ -6,11 +6,11 @@ license.workspace = true
 
 [dependencies]
 # Web framework
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
-tower-cookies = "0.10"
+tower-cookies = "0.11"
 
 # Database
 diesel = { version = "2.3.8", features = ["postgres", "r2d2", "uuid", "chrono"] }
@@ -29,7 +29,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # WebSocket (typed via ws-bridge)
-ws-bridge = { version = "0.1", features = ["server"] }
+ws-bridge = { version = "1.0.0", git = "https://github.com/meawoppl/ws-bridge", tag = "v1.0.0", features = ["server"] }
 
 # Utilities
 anyhow = "1"
@@ -37,12 +37,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # Pre-compressed static frontend assets (brotli/gzip, ETag/304, SPA fallback).
-# memory-serve 0.6.x is the axum-0.7 compatible line (2.x requires axum 0.8+).
-memory-serve = "0.6"
-# Pin alloc-stdlib: 0.2.3 bumped its alloc-no-stdlib dep to 3.0, which clashes
-# with brotli-decompressor 4.0.3 (still on alloc-no-stdlib 2.x) inside
-# memory-serve's brotli 6. Holding 0.2.2 keeps the graph on one version.
-alloc-stdlib = "=0.2.2"
+memory-serve = "2.1"
 
 # Workspace
 shared = { path = "../shared" }
+
+[build-dependencies]
+memory-serve = "2.1"

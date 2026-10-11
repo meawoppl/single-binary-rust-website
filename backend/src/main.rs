@@ -9,7 +9,7 @@ use crate::db::DbPool;
 use axum::http::StatusCode;
 use axum::{routing::get, Router};
 use clap::Parser;
-use memory_serve::{load_assets, CacheControl, MemoryServe};
+use memory_serve::CacheControl;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -43,7 +43,7 @@ pub fn build_app(state: Arc<AppState>) -> Router {
     // Pre-compressed (brotli/gzip), content-negotiated frontend assets with
     // ETag/304 and an SPA fallback to index.html. Assets are embedded at build
     // time in release builds and read from disk in debug builds.
-    let frontend = MemoryServe::new(load_assets!("../frontend/dist"))
+    let frontend = memory_serve::load!()
         .index_file(Some("/index.html"))
         .fallback(Some("/index.html"))
         .fallback_status(StatusCode::OK)
