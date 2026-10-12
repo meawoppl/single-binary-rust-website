@@ -30,7 +30,8 @@ Cargo.toml                        # Workspace root (backend, frontend, shared)
 ├── scripts/check-migration-names.sh
 └── .github/workflows/
     ├── ci.yml                    # lint, audit, fmt, clippy, build, test
-    └── container.yml             # Docker image -> GHCR
+    ├── container.yml             # Docker image -> GHCR
+    └── mobile-ios.yml            # optional Tauri iOS simulator build
 ```
 
 ## Quick Start
@@ -53,6 +54,45 @@ cd frontend && trunk build && cd ..
 cargo run -p backend -- --dev-mode
 # -> http://localhost:3000
 ```
+
+## Optional Mobile iOS CI
+
+The skeleton includes an optional `.github/workflows/mobile-ios.yml` lane for
+apps that add a Tauri mobile shell under `mobile/`. The bare skeleton has no
+mobile app, so the workflow detects that and exits green with a notice.
+
+Once a downstream project adds `mobile/package-lock.json` and
+`mobile/src-tauri/Cargo.toml`, the lane runs on macOS and:
+
+1. Selects the correct iOS simulator target for the runner architecture
+   (`aarch64-sim` on Apple Silicon, `x86_64` on Intel).
+2. Installs the matching Rust iOS targets.
+3. Installs mobile npm dependencies and verifies the npm-provided Tauri CLI has
+   the macOS-only `ios` subcommand.
+4. Runs `cargo check` for the detected mobile crate package against the iOS
+   simulator Rust target.
+5. Runs `npx tauri ios init --ci`.
+6. Clears `src-tauri/gen/apple/build` before archiving so a stale local/CI
+   archive cannot trip Tauri's generated-app rename step on reruns.
+7. Builds an unsigned debug simulator app with `npx tauri ios build --debug
+   --target <simulator-target> --no-sign`.
+8. Lints the generated iOS entitlements plist when one exists.
+
+This intentionally proves simulator buildability only. Device signing,
+provisioning profiles, APNs entitlements, and TestFlight/App Store release
+packaging belong in an app-specific release workflow.
+
+Two Tauri iOS details are worth preserving in downstream apps:
+
+- `bundle.iOS.template` is resolved relative to the command's current working
+  directory. If CI runs from `mobile/`, a template committed under
+  `mobile/src-tauri/templates/ios/project.yml` should be configured as
+  `src-tauri/templates/ios/project.yml`, not `templates/ios/project.yml`.
+- `ios init` regenerates the Xcode project and can reset generated
+  entitlements, while Cargo may keep dependency build scripts cache-warm. If an
+  app relies on build scripts to inject entitlements such as APNs or associated
+  domains, add an app-specific post-build assertion that fails when the expected
+  keys are missing.
 
 ---
 
